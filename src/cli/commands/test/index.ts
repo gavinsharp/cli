@@ -45,6 +45,7 @@ import iacTestCommand from './iac';
 import * as iacTestCommandV2 from './iac/v2';
 import { hasFeatureFlag } from '../../../lib/feature-flags';
 import { checkOSSPaths } from '../../../lib/check-paths';
+import { isStandaloneIacDisabled } from '../../../lib/disabled-features';
 
 const debug = Debug('snyk-test');
 const SEPARATOR = '\n-------------------------------------------------------\n';
@@ -65,7 +66,10 @@ export default async function test(
   const options = setDefaultTestOptions(originalOptions);
   if (originalOptions.iac) {
     // temporary placeholder for the "new" flow that integrates with UPE
-    if (await hasFeatureFlag('iacIntegratedExperience', options)) {
+    if (
+      (await hasFeatureFlag('iacIntegratedExperience', options)) ||
+      isStandaloneIacDisabled
+    ) {
       return await iacTestCommandV2.test(paths, originalOptions);
     } else {
       return await iacTestCommand(...args);

@@ -1,4 +1,5 @@
 import chalk from 'chalk';
+import * as Sarif from 'sarif';
 import * as debugLib from 'debug';
 import { v4 as uuidv4 } from 'uuid';
 import { getCodeTestResults } from './analysis';
@@ -7,7 +8,6 @@ import {
   getCodeDisplayedOutput,
   getPrefix,
   getMeta,
-  filterIgnoredIssues,
 } from './format/output-format';
 import { EcosystemPlugin } from '../../ecosystems/types';
 import { FailedToRunTestError, NoSupportedSastFiles } from '../../errors';
@@ -48,15 +48,18 @@ export const codePlugin: EcosystemPlugin = {
       }
 
       // cloneDeep is used so the sarif is not changed when using the testResults getting the displayed output
-      const sarifTypedResult = cloneDeep(testResults?.analysisResults?.sarif);
+      const sarifTypedResult = cloneDeep(
+        testResults?.analysisResults?.sarif,
+      ) as Sarif.Log;
+      const sarifRunResults = sarifTypedResult.runs?.[0].results ?? [];
 
       // Report flow includes ignored issues (suppressions) in the results.
       const hasIgnoredIssues = options['report'] ?? false;
 
       // If suppressions are included in results filter them out to get real issue count
       const foundIssues = hasIgnoredIssues
-        ? filterIgnoredIssues(sarifTypedResult.runs?.[0].results)
-        : sarifTypedResult.runs?.[0].results;
+        ? filterIgnoredIssues(sarifRunResults)
+        : sarifRunResults;
       const numOfIssues = foundIssues.length || 0;
       analytics.add('sast-issues-found', numOfIssues);
 
@@ -74,7 +77,7 @@ export const codePlugin: EcosystemPlugin = {
       });
 
       if (numOfIssues > 0 && options['no-markdown']) {
-        sarifTypedResult.runs?.[0].results?.forEach(({ message }) => {
+        sarifRunResults.forEach(({ message }) => {
           delete message.markdown;
         });
       }
@@ -126,6 +129,14 @@ export const codePlugin: EcosystemPlugin = {
     }
   },
 };
+
+export function filterIgnoredIssues(
+  analysisResults: Sarif.Result[],
+): Sarif.Result[] {
+  return analysisResults.filter(
+    (rule) => (rule.suppressions?.length ?? 0) === 0,
+  );
+}
 
 function isCodeClientError(error: object): boolean {
   return (
